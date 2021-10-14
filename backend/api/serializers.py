@@ -1,9 +1,39 @@
+import base64
+import re
+from io import BytesIO
+
+from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import UploadedFile
 from django.db import transaction
+from djoser.serializers import UserSerializer as DjoserUserSerializer
 from rest_framework import serializers
 
-from application.utils import ImageField
 from users.serializers import UserSerializer
 from .models import Tag, Ingredient, Recipe, Composition
+
+User = get_user_model()
+
+
+class ImageField(serializers.ImageField):
+    def to_internal_value(self, data):
+        data = re.search(r'(?<=data:)(.+);base64,(.+)$', data)
+        if data is None:
+            self.fail('invalid')
+        content_type, file = data.groups()
+        file_format = content_type.split('/')[1]
+        file_name = self.context.get('request').data.get('name')
+        full_name = f'{file_name}.{file_format}'
+        file = base64.b64decode(file)
+        file_size = len(file)
+        file = BytesIO(file)
+        data = UploadedFile(
+            file=file,
+            name=full_name,
+            content_type=content_type,
+            size=file_size,
+            charset=None
+        )
+        return super().to_internal_value(data)
 
 
 class TagSerializer(serializers.ModelSerializer):
@@ -44,9 +74,13 @@ class IngredientCreateInRecipeSerializer(serializers.ModelSerializer):
 class RecipeSerializer(serializers.ModelSerializer):
     tags = TagSerializer(many=True)
     author = UserSerializer()
-    ingredients = IngredientInRecipeSerializer(many=True)
+    ingredients = serializers.SerializerMethodField()
     is_favorited = serializers.BooleanField()
     is_in_shopping_cart = serializers.BooleanField()
+
+    def get_ingredients(self, obj):
+        return IngredientInRecipeSerializer(
+            obj.composition.all(), many=True).data
 
     class Meta:
         model = Recipe
@@ -68,12 +102,11 @@ class RecipeCreateUpdateSerializer(RecipeSerializer):
         validated_data['author'] = author
         recipe = super().create(validated_data)
 
-        if ingredients is not None:
-            objs = [Composition(recipe=recipe,
-                                ingredient_id=ingredient.get('id'),
-                                amount=ingredient.get('amount'))
-                    for ingredient in ingredients]
-            Composition.objects.bulk_create(objs)
+        objs = [Composition(recipe=recipe,
+                            ingredient_id=ingredient['ingredient'].id,
+                            amount=ingredient['amount'])
+                for ingredient in ingredients]
+        Composition.objects.bulk_create(objs)
 
         return recipe
 
@@ -84,28 +117,34 @@ class RecipeCreateUpdateSerializer(RecipeSerializer):
         validated_data['author'] = author
         recipe = super().update(instance, validated_data)
 
-        if ingredients is not None:
-            composition = {
-                obj.ingredient_id: obj
-                for obj in Composition.objects.filter(recipe=recipe)
-            }
-            objs_update, objs_create = [], []
-            for ingredient in ingredients:
-                if ingredient['ingredient'].id in composition:
-                    obj = composition.pop(ingredient['ingredient'].id)
-                    obj.amount = ingredient['amount']
-                    objs_update.append(obj)
-                else:
-                    objs_create.append(
-                        Composition(recipe=recipe,
-                                    ingredient_id=ingredient['ingredient'].id,
-                                    amount=ingredient['amount']))
-            Composition.objects.bulk_update(objs_update, ['amount'])
-            Composition.objects.bulk_create(objs_create)
-            Composition.objects.filter(
-                recipe=recipe, ingredient_id__in=composition.keys()).delete()
+        composition = {
+            obj.ingredient_id: obj
+            for obj in Composition.objects.filter(recipe=recipe)
+        }
+        objs_update, objs_create = [], []
+        for ingredient in ingredients:
+            if ingredient['ingredient'].id in composition:
+                obj = composition.pop(ingredient['ingredient'].id)
+                obj.amount = ingredient['amount']
+                objs_update.append(obj)
+            else:
+                objs_create.append(
+                    Composition(recipe=recipe,
+                                ingredient_id=ingredient['ingredient'].id,
+                                amount=ingredient['amount']))
+        Composition.objects.bulk_update(objs_update, ['amount'])
+        Composition.objects.bulk_create(objs_create)
+        Composition.objects.filter(
+            recipe=recipe, ingredient_id__in=composition.keys()).delete()
 
         return recipe
+
+    def validate(self, attrs):
+        if not attrs.get('ingredients'):
+            raise serializers.ValidationError({
+                'ingredients': 'В рецепте должен быть как минимум 1 ингредиент'
+            })
+        return super().validate(attrs)
 
     def get_author(self, obj):
         user = self.context.get('request').user
@@ -133,3 +172,24 @@ class RecipeMinifiedSerializer(serializers.ModelSerializer):
     class Meta:
         model = Recipe
         fields = ['id', 'name', 'image', 'cooking_time']
+
+
+class UserWithRecipesSerializer(DjoserUserSerializer):
+    is_subscribed = serializers.BooleanField()
+    recipes = serializers.SerializerMethodField()
+    recipes_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ('id', 'email', 'username', 'first_name',
+                  'last_name', 'is_subscribed', 'recipes', 'recipes_count')
+
+    def get_recipes(self, obj):
+        request = self.context.get('request')
+        recipes_limit = request.query_params.get('recipes_limit')
+        recipes = (obj.recipes.all()[:int(recipes_limit)] if recipes_limit
+                   else obj.recipes)
+        return RecipeMinifiedSerializer(recipes, many=True).data
+
+    def get_recipes_count(self, obj):
+        return obj.recipes.count()

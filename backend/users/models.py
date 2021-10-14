@@ -1,7 +1,18 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.db.models import Exists, OuterRef
 
-from api.models import Recipe
+
+class UserQuerySet(models.QuerySet):
+    def add_is_subscribed_annotation(self, user_id):
+        favorites_model = self.model.subscribed.through
+        return self.annotate(
+            is_subscribed=Exists(
+                favorites_model.objects.filter(
+                    from_user_id=user_id, to_user_id=OuterRef('id')
+                )
+            )
+        )
 
 
 class User(AbstractUser):
@@ -21,10 +32,12 @@ class User(AbstractUser):
         'User', related_name='subscribers', symmetrical=False,
         verbose_name='Подписан')
     favorited = models.ManyToManyField(
-        Recipe, related_name='fans',
+        'api.Recipe', related_name='fans',
         verbose_name='Избранные рецепты')
     in_shopping_cart = models.ManyToManyField(
-        Recipe, related_name='buyers', verbose_name='В корзине')
+        'api.Recipe', related_name='buyers', verbose_name='В корзине')
+
+    objects = UserQuerySet.as_manager()
 
     class Meta:
         verbose_name = 'Пользователь'

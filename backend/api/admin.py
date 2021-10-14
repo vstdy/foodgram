@@ -20,11 +20,11 @@ class RecipeAdmin(admin.ModelAdmin):
     list_per_page = 20
 
     def get_ingredients(self, obj):
-        return ',\n'.join(ingredient.name for ingredient in obj.ingredients.all())
+        return ',\n'.join(obj.ingredients.values_list('name', flat=True))
     get_ingredients.short_description = 'ингредиенты'
 
     def get_tags(self, obj):
-        return ',\n'.join(tag.name for tag in obj.tags.all())
+        return ',\n'.join(obj.tags.values_list('name', flat=True))
     get_tags.short_description = 'тэги'
 
     def get_fans(self, obj):

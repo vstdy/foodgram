@@ -1,6 +1,25 @@
 from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.db.models import Exists, OuterRef
+
+
+class RecipeQuerySet(models.QuerySet):
+    def add_user_annotations(self, user_id):
+        favorites_model = self.model.fans.through
+        buyers_model = self.model.buyers.through
+        return self.annotate(
+            is_favorited=Exists(
+                favorites_model.objects.filter(
+                    user_id=user_id, recipe_id=OuterRef('id')
+                )
+            ),
+            is_in_shopping_cart=Exists(
+                buyers_model.objects.filter(
+                    user_id=user_id, recipe_id=OuterRef('id')
+                )
+            )
+        )
 
 
 class Recipe(models.Model):
@@ -16,9 +35,12 @@ class Recipe(models.Model):
                                          related_name='recipes',
                                          verbose_name='Ингредиенты')
     tags = models.ManyToManyField('Tag', verbose_name='Теги')
-    cooking_time = models.PositiveSmallIntegerField('Время приготовления')
+    cooking_time = models.PositiveSmallIntegerField(
+        'Время приготовления', validators=[MinValueValidator(1)])
     pub_date = models.DateTimeField(
         'Опубликовано', auto_now_add=True, db_index=True)
+
+    objects = RecipeQuerySet.as_manager()
 
     class Meta:
         verbose_name_plural = 'Рецепты'
@@ -72,6 +94,11 @@ class Composition(models.Model):
         verbose_name = 'Ингредиент'
         ordering = ['id']
         unique_together = ('recipe', 'ingredient')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['recipe', 'ingredient'],
+                name='recipe_ingredient_constraint')
+        ]
 
     def __str__(self):
         return f'{self.recipe} - {self.ingredient}'
