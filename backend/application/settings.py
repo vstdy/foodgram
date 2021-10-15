@@ -87,16 +87,12 @@ DJOSER = {
         'user': 'users.serializers.UserSerializer',
         'current_user': 'users.serializers.UserSerializer',
     },
-    "PERMISSIONS": {
-        'set_password': ['api.permissions.CurrentUserOrAdmin'],
-        'user_delete': ['api.permissions.CurrentUserOrAdmin'],
-    },
     'HIDE_USERS': False,
 }
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
+        'rest_framework.permissions.AllowAny',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework.authentication.TokenAuthentication',

@@ -4,14 +4,13 @@ from django.db.models import F, Prefetch, Sum
 from django.http import HttpResponse
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.viewsets import ModelViewSet
 
-from .mixins import RelEntryAddRemoveMixin
 from users.models import User
 from .filters import RecipeFilter, IngredientFilter
+from .mixins import RelEntryAddRemoveMixin
 from .models import Tag, Recipe, Composition, Ingredient
-from .permissions import CurrentUserOrAdmin, IsAdminOrReadOnly
+from .permissions import RecipePermissions, IsAdminOrReadOnly
 from .serializers import (
     TagSerializer, RecipeSerializer, RecipeCreateUpdateSerializer,
     RecipeMinifiedSerializer, IngredientSerializer)
@@ -27,6 +26,7 @@ class TagViewSet(ModelViewSet):
 class RecipeViewSet(ModelViewSet, RelEntryAddRemoveMixin):
     queryset = Recipe.objects.all()
     serializer_class = RecipeSerializer
+    permission_classes = [RecipePermissions]
     filter_backends = [DjangoFilterBackend]
     filterset_class = RecipeFilter
 
@@ -36,14 +36,6 @@ class RecipeViewSet(ModelViewSet, RelEntryAddRemoveMixin):
         if self.action in ['shopping_cart', 'favorite']:
             return RecipeMinifiedSerializer
         return RecipeSerializer
-
-    def get_permissions(self):
-        if self.action in ['update', 'partial_update', 'destroy']:
-            return [CurrentUserOrAdmin()]
-        if self.action in ['shopping_cart', 'favorite',
-                           'download_shopping_cart']:
-            return [IsAuthenticated()]
-        return super().get_permissions()
 
     def get_queryset(self):
         user = self.request.user

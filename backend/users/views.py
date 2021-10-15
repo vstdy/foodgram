@@ -2,24 +2,24 @@ from django.contrib.auth import get_user_model
 from djoser.conf import settings
 from djoser.views import UserViewSet as DjoserUserViewSet
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
 
 from api.mixins import RelEntryAddRemoveMixin
 from api.serializers import UserWithRecipesSerializer
+from .permissions import UserPermissions
 
 User = get_user_model()
 
 
 class UserViewSet(DjoserUserViewSet, RelEntryAddRemoveMixin):
+    permission_classes = [UserPermissions]
+
     def get_serializer_class(self):
         if self.action in ['subscriptions', 'subscribe']:
             return UserWithRecipesSerializer
         return super().get_serializer_class()
 
     def get_permissions(self):
-        if self.action in ['subscriptions', 'subscribe']:
-            return [IsAuthenticated()]
-        return super().get_permissions()
+        return super(DjoserUserViewSet, self).get_permissions()
 
     def get_queryset(self):
         user = self.request.user

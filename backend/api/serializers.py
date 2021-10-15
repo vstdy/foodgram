@@ -64,7 +64,6 @@ class IngredientCreateInRecipeSerializer(serializers.ModelSerializer):
     recipe = serializers.PrimaryKeyRelatedField(read_only=True)
     id = serializers.PrimaryKeyRelatedField(
         source='ingredient', queryset=Ingredient.objects)
-    amount = serializers.IntegerField()
 
     class Meta:
         model = Composition
@@ -143,6 +142,15 @@ class RecipeCreateUpdateSerializer(RecipeSerializer):
         if not attrs.get('ingredients'):
             raise serializers.ValidationError({
                 'ingredients': 'В рецепте должен быть как минимум 1 ингредиент'
+            })
+        ingredients = [ingredient['ingredient'] for ingredient in attrs['ingredients']]
+        if len(ingredients) != len(set(ingredients)):
+            raise serializers.ValidationError({
+                'ingredients': 'Ингредиенты должны быть уникальны'
+            })
+        if len(attrs['tags']) != len(set(attrs['tags'])):
+            raise serializers.ValidationError({
+                'tags': 'Тэги должны быть уникальны'
             })
         return super().validate(attrs)
 

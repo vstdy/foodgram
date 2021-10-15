@@ -2,16 +2,19 @@ from rest_framework import permissions
 from rest_framework.permissions import SAFE_METHODS
 
 
-class RecipePermissions(permissions.IsAuthenticatedOrReadOnly):
+class UserPermissions(permissions.IsAuthenticatedOrReadOnly):
     def has_object_permission(self, request, view, obj):
         user = request.user
-        if view.action in ['update', 'partial_update', 'destroy']:
+        if view.action in ['set_password', 'set_username', 'destroy'] or (
+                view.action == "me" and view.request and
+                view.request.method == "DELETE"
+        ):
             return user.is_admin or obj.pk == user.pk
         return True
 
     def has_permission(self, request, view):
         if view.action in [
-            'shopping_cart', 'favorite', 'download_shopping_cart'
+            'subscriptions', 'subscribe', 'token_destroy'
         ]:
             return bool(request.user and request.user.is_authenticated)
         return super().has_permission(request, view)
