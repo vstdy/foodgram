@@ -17,6 +17,8 @@ class UserPermissions(permissions.IsAuthenticatedOrReadOnly):
             'subscriptions', 'subscribe', 'token_destroy'
         ]:
             return bool(request.user and request.user.is_authenticated)
+        if view.action == 'create':
+            return True
         return super().has_permission(request, view)
 
 

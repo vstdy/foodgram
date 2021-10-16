@@ -1,4 +1,4 @@
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, UserManager
 from django.db import models
 from django.db.models import Exists, OuterRef
 
@@ -13,6 +13,10 @@ class UserQuerySet(models.QuerySet):
                 )
             )
         )
+
+
+class CustomUserManager(UserManager.from_queryset(UserQuerySet)):
+    pass
 
 
 class User(AbstractUser):
@@ -37,7 +41,7 @@ class User(AbstractUser):
     in_shopping_cart = models.ManyToManyField(
         'api.Recipe', related_name='buyers', verbose_name='В корзине')
 
-    objects = UserQuerySet.as_manager()
+    objects = CustomUserManager()
 
     class Meta:
         verbose_name = 'Пользователь'

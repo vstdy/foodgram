@@ -6,7 +6,7 @@ class RecipePermissions(permissions.IsAuthenticatedOrReadOnly):
     def has_object_permission(self, request, view, obj):
         user = request.user
         if view.action in ['update', 'partial_update', 'destroy']:
-            return user.is_admin or obj.pk == user.pk
+            return user.is_admin or obj.author_id == user.pk
         return True
 
     def has_permission(self, request, view):
